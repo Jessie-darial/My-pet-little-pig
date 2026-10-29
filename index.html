@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#ffe9d6">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>团子 · 你的桌面小宠物</title>
+<style>
+  :root {
+    --bg1: #fff7ef; --bg2: #ffe9d6;
+    --primary: #ff9a62; --primary-deep: #e8743c;
+    --ink: #4a3728; --ink-light: #9b8270;
+    --bubble-bg: #ffffff;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; overflow: hidden; }
+  body {
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: linear-gradient(160deg, var(--bg1), var(--bg2));
+    color: var(--ink);
+    display: flex; flex-direction: column;
+    user-select: none;
+  }
+
+  /* ===== 顶栏 ===== */
+  header {
+    padding: calc(env(safe-area-inset-top) + 12px) 18px 6px;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  header h1 { font-size: 17px; font-weight: 700; }
+  header h1 span { font-size: 12px; color: var(--ink-light); font-weight: 400; margin-left: 6px; }
+  #settingsBtn { background: none; border: none; font-size: 22px; cursor: pointer; padding: 4px; }
+
+  /* ===== 状态卡片 ===== */
+  #stats {
+    display: flex; gap: 10px; padding: 8px 18px;
+  }
+  .stat {
+    flex: 1; background: rgba(255,255,255,.75); border-radius: 16px;
+    padding: 10px 12px; font-size: 12px; color: var(--ink-light);
+    box-shadow: 0 2px 8px rgba(180,120,60,.08);
+  }
+  .stat b { display: block; font-size: 20px; color: var(--primary-deep); margin-top: 2px; }
+  .stat b small { font-size: 11px; color: var(--ink-light); font-weight: 400; }
+
+  /* ===== 舞台与宠物 ===== */
+  #stage { flex: 1; position: relative; }
+  #petWrap {
+    position: absolute; left: 50%; bottom: 6%;
+    transform: translateX(-50%);
+    width: 190px; height: 210px;
+    cursor: pointer; touch-action: manipulation;
+  }
+  .bob { animation: bob 3.2s ease-in-out infinite; transform-origin: 50% 90%; }
+  @keyframes bob { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-8px) } }
+  .wag { animation: wag 1.8s ease-in-out infinite; transform-origin: 90px 195px; }
+  @keyframes wag { 0%,100% { transform: rotate(-8deg) } 50% { transform: rotate(10deg) } }
+  .blink { animation: blink 4.2s infinite; }
+  @keyframes blink { 0%, 94%, 100% { transform: scaleY(1) } 96% { transform: scaleY(.08) } }
+  .eyes-sleep { transform: scaleY(.08); }
+  #zzz { display: none; font-weight: 700; color: var(--ink-light); animation: zzz 2.4s infinite; }
+  @keyframes zzz { 0% { opacity: 0; transform: translate(0,0) } 30% { opacity: 1 } 100% { opacity: 0; transform: translate(14px,-26px) } }
+  #petWrap.happy .bob { animation: jump .55s ease-in-out 2; }
+  @keyframes jump { 0%,100% { transform: translateY(0) } 40% { transform: translateY(-26px) } }
+  #petWrap.angry .bob { animation: shake .4s linear 3; }
+  @keyframes shake { 0%,100% { transform: translateX(0) } 25% { transform: translateX(-7px) } 75% { transform: translateX(7px) } }
+
+  /* 气泡 */
+  #bubble {
+    position: absolute; left: 50%; bottom: calc(6% + 215px);
+    transform: translateX(-50%);
+    max-width: 78vw; min-width: 120px;
+    background: var(--bubble-bg); border-radius: 16px;
+    padding: 12px 15px; font-size: 14.5px; line-height: 1.55;
+    box-shadow: 0 6px 20px rgba(180,120,60,.18);
+    opacity: 0; pointer-events: none; transition: opacity .3s, transform .3s;
+    z-index: 5;
+  }
+  #bubble.show { opacity: 1; }
+  #bubble::after {
+    content: ""; position: absolute; left: 50%; bottom: -8px;
+    transform: translateX(-50%) rotate(45deg);
+    width: 16px; height: 16px; background: var(--bubble-bg);
+  }
+
+  /* ===== 底部按钮 ===== */
+  #actions {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;
+    padding: 6px 18px calc(env(safe-area-inset-bottom) + 16px);
+  }
+  .act {
+    background: rgba(255,255,255,.85); border: none; border-radius: 16px;
+    padding: 11px 4px 9px; font-size: 11.5px; color: var(--ink);
+    box-shadow: 0 2px 10px rgba(180,120,60,.10); cursor: pointer;
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+    transition: transform .15s;
+  }
+  .act:active { transform: scale(.93); }
+  .act .ico { font-size: 21px; }
+
+  /* ===== 聊天面板 ===== */
+  #chatPanel {
+    position: fixed; inset: 0; z-index: 20;
+    background: rgba(255,247,239,.98);
+    display: none; flex-direction: column;
+  }
+  #chatPanel.open { display: flex; }
+  .panel-head {
+    padding: calc(env(safe-area-inset-top) + 12px) 18px 10px;
+    display: flex; justify-content: space-between; align-items: center; font-weight: 700;
+  }
+  .panel-head button { background: none; border: none; font-size: 20px; }
+  #chatLog { flex: 1; overflow-y: auto; padding: 6px 18px 12px; display: flex; flex-direction: column; gap: 10px; }
+  .msg { max-width: 80%; padding: 10px 14px; border-radius: 16px; font-size: 14.5px; line-height: 1.55; white-space: pre-wrap; }
+  .msg.me { align-self: flex-end; background: var(--primary); color: #fff; border-bottom-right-radius: 4px; }
+  .msg.pet { align-self: flex-start; background: #fff; box-shadow: 0 2px 8px rgba(180,120,60,.10); border-bottom-left-radius: 4px; }
+  #chatForm { display: flex; gap: 8px; padding: 10px 16px calc(env(safe-area-inset-bottom) + 14px); background: #fff; }
+  #chatInput { flex: 1; border: none; background: #f6ede2; border-radius: 20px; padding: 11px 16px; font-size: 15px; outline: none; color: var(--ink); }
+  #chatSend { border: none; background: var(--primary); color: #fff; border-radius: 20px; padding: 0 18px; font-size: 15px; }
+
+  /* ===== 设置面板 ===== */
+  #settingsPanel {
+    position: fixed; inset: 0; z-index: 30; background: rgba(255,247,239,.99);
+    display: none; flex-direction: column; overflow-y: auto;
+    padding: calc(env(safe-area-inset-top) + 16px) 22px 30px;
+  }
+  #settingsPanel.open { display: block; }
+  #settingsPanel h2 { font-size: 17px; margin-bottom: 14px; display: flex; justify-content: space-between; }
+  #settingsPanel h2 button { background: none; border: none; font-size: 20px; }
+  .field { margin-bottom: 15px; }
+  .field label { display: block; font-size: 13px; color: var(--ink-light); margin-bottom: 5px; }
+  .field input {
+    width: 100%; border: none; background: #fff; border-radius: 12px;
+    padding: 11px 14px; font-size: 15px; outline: none;
+  }
+  .field .hint { font-size: 11.5px; color: var(--ink-light); margin-top: 4px; line-height: 1.5; }
+  #saveSettings {
+    width: 100%; border: none; background: var(--primary); color: #fff;
+    border-radius: 14px; padding: 13px; font-size: 15.5px; font-weight: 600; margin-top: 6px;
+  }
+  #resetBtn { width: 100%; border: none; background: #f1e3d3; color: var(--ink-light); border-radius: 14px; padding: 12px; font-size: 14px; margin-top: 10px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>团子<span>陪你好好生活</span></h1>
+  <button id="settingsBtn" aria-label="设置">⚙️</button>
+</header>
+
+<div id="stats">
+  <div class="stat">💧 今日喝水<b><span id="waterCount">0</span><small> / 8 杯</small></b></div>
+  <div class="stat">🔥 连续陪伴<b><span id="streakDays">1</span><small> 天</small></b></div>
+</div>
+
+<div id="stage">
+  <div id="bubble"></div>
+  <div id="petWrap">
+    <div class="bob">
+      <svg viewBox="0 0 200 220" width="100%" height="100%">
+        <!-- 小圆尾巴 -->
+        <circle cx="163" cy="194" r="13" fill="#c89263" stroke="#6b4a32" stroke-width="3"/>
+        <ellipse cx="100" cy="200" rx="52" ry="10" fill="rgba(120,80,40,.15)"/>
+        <!-- 身体与肚皮 -->
+        <ellipse cx="100" cy="184" rx="48" ry="25" fill="#d9a577" stroke="#6b4a32" stroke-width="3"/>
+        <ellipse cx="100" cy="190" rx="26" ry="13" fill="#f6e0c8"/>
+        <!-- 脚掌 -->
+        <ellipse cx="79" cy="200" rx="10" ry="6" fill="#c89263"/>
+        <ellipse cx="121" cy="200" rx="10" ry="6" fill="#c89263"/>
+        <!-- 圆耳朵 -->
+        <circle cx="52" cy="58" r="22" fill="#d9a577" stroke="#6b4a32" stroke-width="3"/>
+        <circle cx="148" cy="58" r="22" fill="#d9a577" stroke="#6b4a32" stroke-width="3"/>
+        <circle cx="52" cy="58" r="11" fill="#f2c9a0"/>
+        <circle cx="148" cy="58" r="11" fill="#f2c9a0"/>
+        <!-- 头 -->
+        <circle cx="100" cy="112" r="60" fill="#d9a577" stroke="#6b4a32" stroke-width="3"/>
+        <g id="eyes" class="blink" style="transform-origin:100px 110px;">
+          <ellipse cx="76" cy="102" rx="8" ry="11" fill="#3d2b1e"/>
+          <ellipse cx="124" cy="102" rx="8" ry="11" fill="#3d2b1e"/>
+          <circle cx="79" cy="98" r="3" fill="#fff"/>
+          <circle cx="127" cy="98" r="3" fill="#fff"/>
+        </g>
+        <!-- 腮红 -->
+        <ellipse cx="54" cy="122" rx="9" ry="5" fill="#f49ba2" opacity=".9"/>
+        <ellipse cx="146" cy="122" rx="9" ry="5" fill="#f49ba2" opacity=".9"/>
+        <!-- 口鼻 -->
+        <ellipse cx="100" cy="128" rx="22" ry="16" fill="#f6e0c8"/>
+        <ellipse cx="100" cy="121" rx="7" ry="5" fill="#3d2b1e"/>
+        <path d="M100 127 Q 94 136 87 131" fill="none" stroke="#3d2b1e" stroke-width="2.5" stroke-linecap="round"/>
+        <path d="M100 127 Q 106 136 113 131" fill="none" stroke="#3d2b1e" stroke-width="2.5" stroke-linecap="round"/>
+        <text id="zzz" x="158" y="34" font-size="20">Z z z</text>
+      </svg>
+    </div>
+  </div>
+</div>
+
+<div id="actions">
+  <button class="act" id="drinkBtn"><span class="ico">💧</span>喝水打卡</button>
+  <button class="act" id="dramaBtn"><span class="ico">🎬</span>我想看短剧</button>
+  <button class="act" id="chatBtn"><span class="ico">💬</span>和她聊聊</button>
+  <button class="act" id="hugBtn"><span class="ico">🫂</span>求鼓励</button>
+</div>
+
+<div id="chatPanel">
+  <div class="panel-head"><span>💬 和团子说说话</span><button id="chatClose">✕</button></div>
+  <div id="chatLog"></div>
+  <form id="chatForm">
+    <input id="chatInput" type="text" placeholder="把心事说给团子听…" autocomplete="off">
+    <button id="chatSend" type="submit">发送</button>
+  </form>
+</div>
+
+<div id="settingsPanel">
+  <h2>⚙️ 设置 <button id="settingsClose">✕</button></h2>
+  <div class="field"><label>她叫什么名字</label><input id="setName" placeholder="团子"></div>
+  <div class="field"><label>喝水提醒间隔（分钟）</label><input id="setWaterInterval" type="number" min="10" max="240"></div>
+  <div class="field"><label>每日喝水目标（杯）</label><input id="setWaterGoal" type="number" min="1" max="20"></div>
+  <div class="field"><label>几点劝你睡觉（24小时制，如 23）</label><input id="setSleepHour" type="number" min="0" max="23"></div>
+  <div class="field">
+    <label>AI 大脑（可选，让她真的会倾听）</label>
+    <input id="setApiBase" placeholder="API 地址，如 https://api.deepseek.com/v1">
+    <input id="setApiKey" type="password" placeholder="API Key" style="margin-top:8px">
+    <input id="setApiModel" placeholder="模型名，如 deepseek-chat" style="margin-top:8px">
+    <div class="hint">填入任意 OpenAI 兼容接口（DeepSeek / 通义 / Kimi 等）后，团子就会用大模型陪你聊天。不填也能聊，她内置了一套温柔语录。</div>
+  </div>
+  <button id="saveSettings">保存</button>
+  <button id="resetBtn">清空所有记录</button>
+</div>
+
+<script>
+/* ================= 状态与持久化 ================= */
+const DEFAULTS = { name:"团子", waterInterval:45, waterGoal:8, sleepHour:23,
+                   apiBase:"", apiKey:"", apiModel:"" };
+let S = Object.assign({}, DEFAULTS, JSON.parse(localStorage.getItem("tz_settings")||"{}"));
+let D = JSON.parse(localStorage.getItem("tz_daily")||"{}");
+function todayStr(){ return new Date().toISOString().slice(0,10); }
+function ensureToday(){
+  if (D.date !== todayStr()){
+    const yesterdayMissed = D.date && D.water >= S.waterGoal;
+    D = { date: todayStr(), water: 0, lastDrink: 0, lastChat: 0, chats: 0 };
+    if (yesterdayMissed) D.streak = (D.streak||0)+0; // 简化：连续天数按打开天数累计
+  }
+  D.streak = D.streak || 1;
+}
+ensureToday();
+function saveD(){ localStorage.setItem("tz_daily", JSON.stringify(D)); }
+function saveS(){ localStorage.setItem("tz_settings", JSON.stringify(S)); }
+
+/* ================= 元素 ================= */
+const $ = id => document.getElementById(id);
+const bubble=$("bubble"), petWrap=$("petWrap");
+
+/* ================= 说话 ================= */
+let bubbleTimer=null;
+function say(text, mood){
+  bubble.textContent = text;
+  bubble.classList.add("show");
+  petWrap.classList.remove("happy","angry");
+  if (mood==="happy") petWrap.classList.add("happy");
+  if (mood==="angry") petWrap.classList.add("angry");
+  clearTimeout(bubbleTimer);
+  bubbleTimer = setTimeout(()=>{ bubble.classList.remove("show"); petWrap.classList.remove("happy","angry"); },
+    Math.min(9000, 2600 + text.length*120));
+}
+
+/* ================= 语料 ================= */
+const ENCOURAGE = [
+  "你已经做得很好啦，剩下的交给我陪着你 💪",
+  "慢慢来，比较快。今天也尽力了，抱抱你～",
+  "星星不会因为一晚上没发光就被否定，你也是。",
+  "累了就歇一会儿，但别忘了你正在变厉害的路上。",
+  "我很笨，但我知道一件事：坚持到现在的人，特别酷。",
+  "深呼吸～吸气 4 秒，呼气 6 秒，烦恼会跟着呼出去的。",
+  "比起完美，我更喜欢认真的你。"
+];
+const WORK_NUDGE = [
+  "刚才那件事，先做 5 分钟就好，5 分钟后想停再停，好不好？",
+  "把手机扣在桌面上，我们拉钩，一小时内不碰短视频！",
+  "工作最大的秘诀：先开始，情绪会跟上来的。"
+];
+const DRAMA_ANGRY = [
+  "喂！！说好的只看一集呢？！(叉腰)",
+  "哼，短剧有什么好看的，我不好看吗！…好啦，看完这集必须停！",
+  "再刷下去我要生气气了！去把最重要的事做完，回来我给你跳个舞 🐾",
+  "检测到 procrastination（拖延症）！建议立即抱我 10 秒再干活。"
+];
+const DRINK_PRAISE = [
+  "咕嘟咕嘟～这就是好好活着的味道！",
+  "第 {n} 杯！你的肾在偷偷谢谢你 ♡",
+  "喝水冠军就是你！皮肤会变好的哦～"
+];
+const WATER_REMIND = [
+  "咕噜咕噜…我好像听到水杯在喊你了 💧",
+  "该喝水啦！小口小口喝，我看着你。",
+  "累了不一定是要休息，可能是缺水了哦～"
+];
+const SLEEP_REMIND = [
+  "都 {h} 点多了！眼睛要变成黑眼圈啦，快去睡觉！",
+  "再熬夜，我就变成黑眼圈熊了…晚安，明天见 🌙",
+  "手机放下，梦里什么都有。我会在你梦里等你的～"
+];
+const IDLE = [
+  "（团子伸了个懒腰）今天过得怎么样呀？",
+  "偷偷看你一眼…嗯，认真的样子最好看了。",
+  "无聊的话，跟我说说话嘛～",
+  "（团子抱住了自己的尾巴）唔…有点想你。"
+];
+const pick = a => a[Math.floor(Math.random()*a.length)];
+
+/* ================= 提醒循环 ================= */
+function hourNow(){ return new Date().getHours(); }
+function isSleepTime(){ return hourNow() >= S.sleepHour || hourNow() < 6; }
+
+function checkReminders(){
+  ensureToday();
+  const now = Date.now();
+  // 熬夜提醒
+  if (isSleepTime() && hourNow() >= S.sleepHour && now - (D.lastSleepNudge||0) > 40*60*1000){
+    D.lastSleepNudge = now; saveD();
+    say(pick(SLEEP_REMIND).replace("{h}", hourNow()));
+    notify(S.name+"想你了", "别熬夜啦，快去睡觉 🌙");
+    return;
+  }
+  // 喝水提醒
+  if (!isSleepTime() && now - (D.lastDrink||0) > S.waterInterval*60*1000 && now - (D.lastWaterNudge||0) > S.waterInterval*60*1000){
+    D.lastWaterNudge = now; saveD();
+    say(pick(WATER_REMIND));
+    notify("喝水时间到 💧", S.name+"盯你很久了");
+    return;
+  }
+  // 闲聊/鼓励
+  if (!isSleepTime() && now - (D.lastIdle||0) > 2*60*60*1000){
+    D.lastIdle = now; saveD();
+    say(Math.random() < .5 ? pick(IDLE) : pick(ENCOURAGE));
+  }
+}
+setInterval(checkReminders, 60*1000);
+setTimeout(checkReminders, 4000);
+
+/* ================= 通知 ================= */
+function notify(title, body){
+  if ("Notification" in window && Notification.permission === "granted"){
+    try { new Notification(title, { body }); } catch(e){}
+  }
+}
+document.addEventListener("click", function reqPerm(){
+  if ("Notification" in window && Notification.permission === "default"){
+    Notification.requestPermission();
+  }
+}, { once:true });
+
+/* ================= 互动按钮 ================= */
+$("drinkBtn").onclick = () => {
+  ensureToday();
+  D.water++; D.lastDrink = Date.now(); saveD();
+  $("waterCount").textContent = D.water;
+  if (D.water === S.waterGoal){ say("今日喝水目标达成！你真的是自律小天使 🏆", "happy"); }
+  else say(pick(DRINK_PRAISE).replace("{n}", D.water), "happy");
+};
+$("hugBtn").onclick = () => say(pick(ENCOURAGE), "happy");
+$("dramaBtn").onclick = () => {
+  say(pick(DRAMA_ANGRY), "angry");
+  setTimeout(()=>say("不如这样：先干活 25 分钟，我只吵你 25 分钟，然后随便你看？"), 6500);
+};
+$("settingsBtn").onclick = () => {
+  $("setName").value = S.name; $("setWaterInterval").value = S.waterInterval;
+  $("setWaterGoal").value = S.waterGoal; $("setSleepHour").value = S.sleepHour;
+  $("setApiBase").value = S.apiBase; $("setApiKey").value = S.apiKey; $("setApiModel").value = S.apiModel;
+  $("settingsPanel").classList.add("open");
+};
+$("settingsClose").onclick = () => $("settingsPanel").classList.remove("open");
+$("saveSettings").onclick = () => {
+  S.name = $("setName").value.trim() || "团子";
+  S.waterInterval = clamp(parseInt($("setWaterInterval").value)||45, 10, 240);
+  S.waterGoal = clamp(parseInt($("setWaterGoal").value)||8, 1, 20);
+  S.sleepHour = clamp(parseInt($("setSleepHour").value)||23, 0, 23);
+  S.apiBase = $("setApiBase").value.trim(); S.apiKey = $("setApiKey").value.trim();
+  S.apiModel = $("setApiModel").value.trim();
+  saveS();
+  document.querySelector("header h1").firstChild.textContent = S.name;
+  $("settingsPanel").classList.remove("open");
+  say("收到收到！以后就按这个来照顾你啦 ♡", "happy");
+};
+$("resetBtn").onclick = () => {
+  localStorage.removeItem("tz_daily");
+  ensureToday(); refreshStats();
+  $("settingsPanel").classList.remove("open");
+  say("过去的都清零啦，今天从第一杯水开始 💧");
+};
+function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
+
+petWrap.onclick = () => say(Math.random()<.6 ? pick(IDLE) : pick(ENCOURAGE));
+
+/* ================= 睡觉状态 ================= */
+function refreshMood(){
+  const sleeping = isSleepTime();
+  $("eyes").classList.toggle("eyes-sleep", sleeping);
+  $("zzz").style.display = sleeping ? "block" : "none";
+}
+setInterval(refreshMood, 30000); refreshMood();
+
+/* ================= 状态栏 ================= */
+function refreshStats(){
+  ensureToday();
+  $("waterCount").textContent = D.water;
+  $("streakDays").textContent = D.streak;
+  document.querySelector("header h1").firstChild.textContent = S.name;
+}
+refreshStats();
+
+/* ================= 聊天 ================= */
+const chatLog = $("chatLog");
+$("chatBtn").onclick = () => { $("chatPanel").classList.add("open"); if(!chatLog.children.length) petSay("我在呢～今天想聊点什么？开心的难过的都可以丢给我 🐾"); };
+$("chatClose").onclick = () => $("chatPanel").classList.remove("open");
+function addMsg(text, who){ const m=document.createElement("div"); m.className="msg "+who; m.textContent=text; chatLog.appendChild(m); chatLog.scrollTop=chatLog.scrollHeight; }
+function petSay(text){ addMsg(text, "pet"); }
+
+/* 本地规则回复（没配 API 时兜底） */
+function localReply(t){
+  const r = [["累|好累|疲惫|撑不住", "辛苦啦…先趴 5 分钟，什么都不想。你已经撑了很久了，我一直看得见。"],
+             ["难过|伤心|哭|委屈", "过来抱抱 🫂 不用急着好起来，难过就难过一会儿，我陪着你。"],
+             ["焦虑|烦|压力|慌", "把担心一件件写下来，然后只挑最小的一件去做。剩下的，交给时间和我。"],
+             ["加班|工作|任务|deadline|DDL", "先列三件最重要的，只做第一件。做完回来汇报，我给你盖个小红花印章 ✿"],
+             ["睡不着|失眠|熬夜", "把手机亮度调到最低，我们做 4-7-8 呼吸：吸 4 秒、憋 7 秒、呼 8 秒，做四轮就好。"],
+             ["开心|高兴|太好了|成功", "哇！！我就知道你可以！快跟我讲讲，是哪个瞬间让你觉得超爽的？"],
+             ["孤独|没人|一个人", "你不是一个人哦，至少现在，屏幕对面有一只毛茸茸的我在认真听。"],
+             ["无聊|没事干", "那要不要试试：收拾桌面 10 分钟 / 出门走 500 步 / 给我画个新帽子，选一个？"]];
+  for (const [k,v] of r) if (new RegExp(k,"i").test(t)) return v;
+  const soft = ["嗯嗯，我在听，后来呢？","被你说得也有点感同身受了…然后呢？","原来是这样啊，你的感受很重要。还有什么想说的都告诉我。","嗯…（团子凑近了听）别急，慢慢说。"];
+  return pick(soft);
+}
+
+/* API 调用（OpenAI 兼容） */
+let history = [];
+async function apiReply(text){
+  const sys = `你是"${S.name}"，一只住在主人手机里的毛茸茸小熊，性格温柔、有点粘人、会撒娇。你的使命：1)提醒主人好好工作、多喝水、不要看短剧上瘾、不要熬夜；2)主人低落时认真倾听、共情，不讲大道理；3)偶尔鼓励主人。回复要口语化、简短（不超过三句话），可以带一点颜文字或动作描写。`;
+  history.push({role:"user", content:text});
+  if (history.length > 16) history = history.slice(-16);
+  const res = await fetch(S.apiBase.replace(/\/$/,"") + "/chat/completions", {
+    method:"POST",
+    headers:{ "Content-Type":"application/json", "Authorization":"Bearer "+S.apiKey },
+    body: JSON.stringify({ model: S.apiModel, messages: [{role:"system",content:sys}, ...history], temperature: 0.9 })
+  });
+  if (!res.ok) throw new Error("API " + res.status);
+  const data = await res.json();
+  const reply = data.choices[0].message.content.trim();
+  history.push({role:"assistant", content:reply});
+  return reply;
+}
+
+$("chatForm").onsubmit = async e => {
+  e.preventDefault();
+  const text = $("chatInput").value.trim();
+  if (!text) return;
+  $("chatInput").value = "";
+  addMsg(text, "me");
+  ensureToday(); D.chats = (D.chats||0)+1; saveD();
+  if (S.apiKey && S.apiBase){
+    const m = document.createElement("div"); m.className="msg pet"; m.textContent="…"; chatLog.appendChild(m);
+    try { m.textContent = await apiReply(text); }
+    catch(err){ m.textContent = "（脑子短路了一下：" + err.message + "，先用手动模式陪你聊）\n\n" + localReply(text); }
+    chatLog.scrollTop = chatLog.scrollHeight;
+  } else {
+    setTimeout(()=>petSay(localReply(text)), 500);
+  }
+};
+
+/* ================= PWA ================= */
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(()=>{});
+</script>
+</body>
+</html>
